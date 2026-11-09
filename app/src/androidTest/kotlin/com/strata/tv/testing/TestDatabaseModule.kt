@@ -64,8 +64,4 @@ object TestDatabaseModule {
         .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
-    @Provides
-    @Singleton
-    fun provideM3uParser(): com.strata.tv.data.m3u.M3uParser =
-        com.strata.tv.data.m3u.M3uParser()
 }
