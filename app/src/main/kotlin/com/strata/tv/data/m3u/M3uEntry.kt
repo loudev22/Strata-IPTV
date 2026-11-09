@@ -3,11 +3,8 @@ package com.strata.tv.data.m3u
 import com.strata.tv.domain.ContentType
 
 /**
- * A single entry parsed out of an M3U playlist.
- *
- * Mirrors v1's `M3uEntry` (lib/services/m3u_parser.dart).  Fields stay
- * named as in v1 so the port reads identically; field order follows
- * v1 too for ease of comparison.
+ * Normalized catalogue item returned by Xtream JSON endpoints and consumed
+ * by the shared classification, deduplication and Room persistence pipeline.
  */
 data class M3uEntry(
     val displayName: String,

@@ -187,158 +187,48 @@ private fun PickProviderStep(viewModel: SetupViewModel) {
 @Composable
 private fun CredentialsStep(state: SetupState, viewModel: SetupViewModel) {
     val isCustomXtream = state.providerId == "custom_xtream"
-    val isCustomM3u = state.providerId == "custom_m3u"
-    val isPresetXtream = !isCustomXtream && !isCustomM3u  // mybunny / skyglass / etc.
-
-    // Hidden by default for preset providers — the URL is pre-filled
-    // and only needs editing if the default is wrong.  Pulling it out
-    // of the primary form stops the on-screen keyboard opening on the
-    // URL field every time the user lands on this step.
     var advancedOpen by rememberSaveable { mutableStateOf(false) }
-
     BackRow(label = BuiltInProviders.byId(state.providerId)?.displayName ?: state.providerId,
         onBack = { viewModel.back() })
     Spacer(Modifier.height(16.dp))
-
-    when {
-        isCustomM3u -> {
-            FieldRow(
-                label = "M3U URL",
-                value = state.customM3uUrl,
-                onValueChange = { viewModel.updateField(SetupViewModel.Field.CustomM3uUrl, it) },
-                keyboardType = KeyboardType.Uri,
-            )
-        }
-        isCustomXtream -> {
-            // No preset — user MUST enter a host, so show it up front.
-            FieldRow(
-                label = "Host (e.g. http://provider.com:8080)",
+    if (isCustomXtream) {
+        FieldRow(
+            label = "Host (e.g. http://provider.com:8080)",
+            value = state.providerHost,
+            onValueChange = { viewModel.updateField(SetupViewModel.Field.Host, it) },
+            keyboardType = KeyboardType.Uri,
+        )
+        Spacer(Modifier.height(12.dp))
+    }
+    FieldRow(label = "Username", value = state.username,
+        onValueChange = { viewModel.updateField(SetupViewModel.Field.Username, it) })
+    Spacer(Modifier.height(12.dp))
+    FieldRow(label = "Password", value = state.password,
+        onValueChange = { viewModel.updateField(SetupViewModel.Field.Password, it) },
+        isPassword = true)
+    if (!isCustomXtream) {
+        Spacer(Modifier.height(16.dp))
+        AdvancedRow(expanded = advancedOpen,
+            hostPreview = state.providerHost.ifBlank { "auto" },
+            onToggle = { advancedOpen = !advancedOpen })
+        if (advancedOpen) {
+            Spacer(Modifier.height(12.dp))
+            FieldRow(label = "Host (only change this if your provider tells you to)",
                 value = state.providerHost,
                 onValueChange = { viewModel.updateField(SetupViewModel.Field.Host, it) },
-                keyboardType = KeyboardType.Uri,
-            )
-            Spacer(Modifier.height(12.dp))
-            FieldRow(
-                label = "Username",
-                value = state.username,
-                onValueChange = { viewModel.updateField(SetupViewModel.Field.Username, it) },
-            )
-            Spacer(Modifier.height(12.dp))
-            FieldRow(
-                label = "Password",
-                value = state.password,
-                onValueChange = { viewModel.updateField(SetupViewModel.Field.Password, it) },
-                isPassword = true,
-            )
-        }
-        isPresetXtream -> {
-            // Username + password — preset hosts are either baked in
-            // or resolved automatically (SkyGlass via its license
-            // server, see [com.strata.tv.data.xtream.SkyGlassLicenseClient]),
-            // so the user never has to touch the URL.
-            FieldRow(
-                label = "Username",
-                value = state.username,
-                onValueChange = { viewModel.updateField(SetupViewModel.Field.Username, it) },
-            )
-            Spacer(Modifier.height(12.dp))
-            FieldRow(
-                label = "Password",
-                value = state.password,
-                onValueChange = { viewModel.updateField(SetupViewModel.Field.Password, it) },
-                isPassword = true,
-            )
-            Spacer(Modifier.height(20.dp))
-            PlaylistSourceToggle(
-                useFiltered = state.useFilteredPlaylist,
-                onToggle = { viewModel.toggleUseFilteredPlaylist() },
-            )
-            Spacer(Modifier.height(16.dp))
-            AdvancedRow(
-                expanded = advancedOpen,
-                hostPreview = state.providerHost.ifBlank { "auto" },
-                onToggle = { advancedOpen = !advancedOpen },
-            )
-            if (advancedOpen) {
-                Spacer(Modifier.height(12.dp))
-                FieldRow(
-                    label = "Host (only change this if your provider tells you to)",
-                    value = state.providerHost,
-                    onValueChange = { viewModel.updateField(SetupViewModel.Field.Host, it) },
-                    keyboardType = KeyboardType.Uri,
-                )
-            }
+                keyboardType = KeyboardType.Uri)
         }
     }
-
     Spacer(Modifier.height(20.dp))
-
     if (state.errorMessage != null) {
         Text(state.errorMessage, color = StrataColors.StatusLive, fontSize = 13.sp)
         Spacer(Modifier.height(12.dp))
     }
-
     PrimaryButton(
         label = if (state.testing) "Testing connection..." else "Test and continue",
         enabled = !state.testing,
         onClick = { viewModel.submitCredentials() },
     )
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun PlaylistSourceToggle(
-    useFiltered: Boolean,
-    onToggle: () -> Unit,
-) {
-    Surface(
-        onClick = onToggle,
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = StrataColors.SurfaceRaised,
-            focusedContainerColor = StrataColors.SurfaceFloat,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-        ) {
-            // Plain text checkbox indicator — keeps the wizard's look
-            // consistent with the country / language chips above.
-            Text(
-                text = if (useFiltered) "[x]" else "[ ]",
-                color = if (useFiltered) StrataColors.AccentPrimaryBright
-                else StrataColors.TextTertiary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Use my filtered list",
-                    color = StrataColors.TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = if (useFiltered) {
-                        "Pulls only the channels and films you've ticked " +
-                            "on your provider's website. Make sure you've " +
-                            "actually picked something there or your library " +
-                            "will be empty."
-                    } else {
-                        "Off — pulls your provider's full catalogue. " +
-                            "Tick this if you've curated a personal " +
-                            "playlist on the provider's website."
-                    },
-                    color = StrataColors.TextSecondary,
-                    fontSize = 12.sp,
-                )
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)

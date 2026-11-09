@@ -3,6 +3,8 @@ package com.strata.tv.wizard
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.strata.tv.data.settings.SettingsRepository
+import com.strata.tv.data.xtream.Me2uLicenseClient
+import com.strata.tv.data.xtream.SkyGlassLicenseClient
 import com.strata.tv.testing.FakeXtreamServer
 import com.strata.tv.testing.resetForTest
 import com.strata.tv.ui.setup.SetupState
@@ -38,6 +40,8 @@ class SetupViewModelTest {
 
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var xtreamApi: com.strata.tv.data.settings.XtreamApi
+    @Inject lateinit var skyGlassLicense: SkyGlassLicenseClient
+    @Inject lateinit var me2uLicense: Me2uLicenseClient
 
     private lateinit var fakeServer: FakeXtreamServer
     private lateinit var viewModel: SetupViewModel
@@ -47,7 +51,7 @@ class SetupViewModelTest {
         hilt.inject()
         settings.resetForTest()
         fakeServer = FakeXtreamServer().apply { start() }
-        viewModel = SetupViewModel(settings, xtreamApi)
+        viewModel = SetupViewModel(settings, xtreamApi, skyGlassLicense, me2uLicense)
     }
 
     @After
@@ -57,7 +61,7 @@ class SetupViewModelTest {
 
     @Test
     fun submitCredentials_withEmptyFields_setsErrorMessage() = runTest {
-        viewModel.selectProvider("custom_m3u")
+        viewModel.selectProvider("custom_xtream")
         // No URL entered.
 
         viewModel.submitCredentials()
@@ -68,46 +72,24 @@ class SetupViewModelTest {
         assertThat(state.step).isEqualTo(SetupViewModel.Step.Credentials)
     }
 
-    @Test
-    fun customM3uHappyPath_advancesToFiltersAndFinishes() = runTest {
-        viewModel.selectProvider("custom_m3u")
-        viewModel.updateField(
-            SetupViewModel.Field.CustomM3uUrl,
-            "http://example.com/playlist.m3u",
-        )
-
-        // Step 2 -> 3
-        viewModel.submitCredentials()
-        advanceUntilIdle()
-        val afterCreds = viewModel.state.first { it.step == SetupViewModel.Step.Filters }
-        assertThat(afterCreds.errorMessage).isNull()
-
-        // Step 3 -> done
-        viewModel.finish()
-        val finalState = viewModel.state.first { it.finished }
-        assertThat(finalState.finished).isTrue()
-
-        // Persisted: provider + default UK + English filters.
-        val saved = settings.current()
-        assertThat(saved.provider.providerId).isEqualTo("custom_m3u")
-        assertThat(saved.provider.customM3uUrl).isEqualTo("http://example.com/playlist.m3u")
-        assertThat(saved.countryWhitelist).contains("UK")
-        assertThat(saved.wantedLanguages).contains("en")
-    }
-
-    @Test
-    fun xtreamGoodCreds_advancesToFilters() = runTest {
+        @Test
+    fun xtreamGoodCreds_advancesAndPersistsConfiguration() = runTest {
         fakeServer.authenticated = true
         viewModel.selectProvider("custom_xtream")
         viewModel.updateField(SetupViewModel.Field.Host, fakeServer.host())
         viewModel.updateField(SetupViewModel.Field.Username, "test")
         viewModel.updateField(SetupViewModel.Field.Password, "secret")
-
         viewModel.submitCredentials()
         advanceUntilIdle()
-
         val afterCreds = viewModel.state.first { it.step == SetupViewModel.Step.Filters }
         assertThat(afterCreds.errorMessage).isNull()
+        viewModel.finish()
+        val finalState = viewModel.state.first { it.finished }
+        assertThat(finalState.finished).isTrue()
+        val saved = settings.current()
+        assertThat(saved.provider.providerId).isEqualTo("custom_xtream")
+        assertThat(saved.provider.host).isEqualTo(fakeServer.host())
+        assertThat(saved.provider.username).isEqualTo("test")
     }
 
     @Test
@@ -129,8 +111,10 @@ class SetupViewModelTest {
 
     @Test
     fun filterToggle_addsAndRemovesItem() = runTest {
-        viewModel.selectProvider("custom_m3u")
-        viewModel.updateField(SetupViewModel.Field.CustomM3uUrl, "http://x.com/p.m3u")
+        viewModel.selectProvider("custom_xtream")
+        viewModel.updateField(SetupViewModel.Field.Host, fakeServer.host())
+        viewModel.updateField(SetupViewModel.Field.Username, "test")
+        viewModel.updateField(SetupViewModel.Field.Password, "secret")
         viewModel.submitCredentials()
         advanceUntilIdle()
 
@@ -147,8 +131,10 @@ class SetupViewModelTest {
 
     @Test
     fun deselectAllLanguages_clearsThenSelectAllRestores() = runTest {
-        viewModel.selectProvider("custom_m3u")
-        viewModel.updateField(SetupViewModel.Field.CustomM3uUrl, "http://x.com/p.m3u")
+        viewModel.selectProvider("custom_xtream")
+        viewModel.updateField(SetupViewModel.Field.Host, fakeServer.host())
+        viewModel.updateField(SetupViewModel.Field.Username, "test")
+        viewModel.updateField(SetupViewModel.Field.Password, "secret")
         viewModel.submitCredentials()
         advanceUntilIdle()
 

@@ -11,9 +11,8 @@ import dagger.assisted.AssistedInject
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * WorkManager [CoroutineWorker] that runs an M3U playlist sync in
- * the background.  Reads the playlist URL from [SettingsRepository]
- * so a credentials change in Settings is picked up on the next run.
+ * WorkManager CoroutineWorker that syncs the provider catalogue through
+ * the Xtream Codes JSON API using the latest saved credentials.
  *
  * Skips work cleanly if the user hasn't completed first-run setup
  * (provider not configured yet) — better than a hard failure that
@@ -36,7 +35,7 @@ class SyncWorker @AssistedInject constructor(
                 return Result.success()
             }
             val sourceId = bootstrap.ensureSource()
-            syncService.syncFromUrl(config.toM3uUrl(), sourceId)
+            syncService.syncFromXtream(config, sourceId)
             Log.d(TAG, "Background sync completed successfully")
             Result.success()
         } catch (e: CancellationException) {

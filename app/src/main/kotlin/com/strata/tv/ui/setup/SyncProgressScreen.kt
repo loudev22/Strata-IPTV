@@ -60,7 +60,7 @@ fun SyncProgressScreen(
         Phase(
             id = "download",
             title = "Downloading from your provider",
-            subtitle = "Pulling your IPTV playlist",
+            subtitle = "Pulling live channels, movies and series from your provider",
         ),
         Phase(
             id = "sort",

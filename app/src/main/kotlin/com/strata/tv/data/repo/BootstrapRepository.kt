@@ -7,10 +7,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Ensures the app has a row in the `sources` table for the user's
- * playlist URL.  The URL itself comes from [SettingsRepository] —
- * never hard-coded — and may be empty until the first-run wizard
- * has been completed.
+ * Ensures the app has a stable source row for the configured Xtream provider.
+ * The legacy playlist_url column stores a content-ID namespace, not a
+ * downloadable playlist URL.
  *
  * The `sources` row is reused across syncs and its `playlist_url`
  * column is updated when the user changes provider in Settings.
@@ -22,25 +21,23 @@ class BootstrapRepository @Inject constructor(
 ) {
     /**
      * Resolve the source row id, creating one if it doesn't exist.
-     * Always rewrites the playlist URL so a credentials change in
-     * Settings takes effect on the next sync without leaking the
-     * previous URL.
+     * Refresh the stable namespace and EPG URL when provider credentials change.
      */
     suspend fun ensureSource(): Int {
         val current = settings.current()
-        val playlistUrl = if (current.provider.isConfigured) current.provider.toM3uUrl() else ""
+        val sourceKey = if (current.provider.isConfigured) current.provider.toSourceKey() else ""
         val epgUrl = current.provider.toEpgUrl().orEmpty()
         val existing = sourceDao.all().firstOrNull()
         if (existing != null) {
             // Keep the row id stable; refresh URLs if they've changed.
-            if (existing.playlistUrl != playlistUrl || existing.epgUrl != epgUrl) {
-                sourceDao.insert(existing.copy(playlistUrl = playlistUrl, epgUrl = epgUrl))
+            if (existing.playlistUrl != sourceKey || existing.epgUrl != epgUrl) {
+                sourceDao.insert(existing.copy(playlistUrl = sourceKey, epgUrl = epgUrl))
             }
             return existing.id
         }
         return sourceDao.insert(
             SourceEntity(
-                playlistUrl = playlistUrl,
+                playlistUrl = sourceKey,
                 epgUrl = epgUrl,
                 userAgent = "Strata TV",
             ),

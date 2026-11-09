@@ -110,7 +110,7 @@ class SettingsViewModel @Inject constructor(
             // renders an error banner.  We still log here as well so
             // any failure shows up in adb logcat for diagnosis (#47).
             runCatching {
-                syncService.syncFromUrl(cfg.toM3uUrl(), sourceId)
+                syncService.syncFromXtream(cfg, sourceId)
                 settingsRepo.setLastSyncEpochDay(Instant.now().epochSecond / 86_400)
             }.onFailure { e ->
                 android.util.Log.e("SettingsVM", "refreshLibrary failed", e)
@@ -126,19 +126,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepo.clearProvider() }
     }
 
-    /**
-     * Toggle the "use website-curated filtered playlist" flag on the
-     * current provider config and persist it.  Triggers a re-sync on
-     * next launch (or via "Refresh library now") so the new URL is
-     * actually exercised.
-     */
-    fun setUseFilteredPlaylist(value: Boolean) {
-        viewModelScope.launch {
-            val current = settingsRepo.current().provider
-            settingsRepo.setProvider(current.copy(useFilteredPlaylist = value))
-        }
-    }
-
     fun setSyncFrequency(value: SyncFrequency) {
         viewModelScope.launch { settingsRepo.setSyncFrequency(value) }
     }
@@ -146,8 +133,8 @@ class SettingsViewModel @Inject constructor(
     fun setCountryWhitelist(values: Set<String>) {
         viewModelScope.launch {
             settingsRepo.setCountryWhitelist(values)
-            // Country whitelist only filters at sync time (M3U group-title
-            // prefix), so don't recompute — a re-sync is what applies it.
+            // Country whitelist filters Xtream category-name prefixes at sync time,
+            // so don't recompute — a re-sync is what applies it.
         }
     }
 

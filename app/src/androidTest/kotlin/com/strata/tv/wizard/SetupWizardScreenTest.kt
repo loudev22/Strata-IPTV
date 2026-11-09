@@ -81,7 +81,7 @@ class SetupWizardScreenTest {
         compose.onNodeWithText("MyBunny.TV").assertIsDisplayed()
         compose.onNodeWithText("SkyGlass").assertIsDisplayed()
         compose.onNodeWithText("Custom Xtream").assertIsDisplayed()
-        compose.onNodeWithText("Custom M3U URL").assertIsDisplayed()
+        compose.onAllNodesWithText("Custom M3U URL").assertCountEquals(0)
     }
 
     @Test
@@ -96,8 +96,8 @@ class SetupWizardScreenTest {
 
         // Host field is NOT shown for built-in providers (it's baked into
         // BuiltInProviders.Entry.host).  Assert by negation — the label
-        // would say "Host (e.g. http://provider.com)" for custom Xtream.
-        compose.onAllNodesWithText("Host (e.g. http://provider.com)")
+        // would say "Host (e.g. http://provider.com:8080)" for custom Xtream.
+        compose.onAllNodesWithText("Host (e.g. http://provider.com:8080)")
             .assertCountEquals(0)
 
         // Picker entries are gone now that we've advanced.
@@ -111,7 +111,7 @@ class SetupWizardScreenTest {
         compose.onNodeWithText("Custom Xtream").performClick()
 
         // Custom Xtream shows Host + Username + Password.
-        compose.onNodeWithText("Host (e.g. http://provider.com)").assertIsDisplayed()
+        compose.onNodeWithText("Host (e.g. http://provider.com:8080)").assertIsDisplayed()
         compose.onNodeWithText("Username").assertIsDisplayed()
         compose.onNodeWithText("Password").assertIsDisplayed()
     }
@@ -133,19 +133,7 @@ class SetupWizardScreenTest {
         compose.onNodeWithText("MyBunny.TV").assertIsDisplayed()
         compose.onNodeWithText("SkyGlass").assertIsDisplayed()
         compose.onNodeWithText("Custom Xtream").assertIsDisplayed()
-        compose.onNodeWithText("Custom M3U URL").assertIsDisplayed()
+        compose.onAllNodesWithText("Custom M3U URL").assertCountEquals(0)
     }
 
-    @Test
-    fun customM3u_showsUrlFieldWithoutUsernameOrPassword() {
-        launch()
-
-        compose.onNodeWithText("Custom M3U URL").performClick()
-
-        // Only the M3U URL field is shown — no credentials, no host.
-        compose.onNodeWithText("M3U URL").assertIsDisplayed()
-        compose.onAllNodesWithText("Username").assertCountEquals(0)
-        compose.onAllNodesWithText("Password").assertCountEquals(0)
-        compose.onAllNodesWithText("Host (e.g. http://provider.com)").assertCountEquals(0)
-    }
 }

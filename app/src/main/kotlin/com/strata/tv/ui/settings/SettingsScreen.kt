@@ -99,24 +99,6 @@ fun SettingsScreen(
                         supporting = "$status, expires $expiry, ${info.activeConnections}/${info.maxConnections} connections",
                     )
                 }
-                if (settings.provider.providerId != "custom_m3u" &&
-                    settings.provider.providerId.isNotEmpty()
-                ) {
-                    val on = settings.provider.useFilteredPlaylist
-                    ListRow(
-                        headline = if (on) "Using filtered playlist" else "Using full catalogue",
-                        supporting = if (on) {
-                            "Pulling only the channels and films you've ticked " +
-                                "on your provider's website. Tap to switch back " +
-                                "to the full catalogue."
-                        } else {
-                            "Pulling your provider's full catalogue. Tap to switch " +
-                                "to the personal playlist you curated on the " +
-                                "provider's website."
-                        },
-                        onClick = { viewModel.setUseFilteredPlaylist(!on) },
-                    )
-                }
                 ListRow(
                     headline = "Change provider",
                     supporting = "Reset and re-enter your IPTV credentials",
@@ -459,17 +441,8 @@ private fun SectionHeader(title: String) {
     )
 }
 
-private fun maskUrl(url: String): String =
-    try {
-        val uri = java.net.URI(url)
-        "${uri.scheme}://${uri.host}/****"
-    } catch (_: Exception) {
-        "****"
-    }
-
 private fun describeProvider(provider: ProviderConfig): String = when {
     !provider.isConfigured -> "Not configured, run setup wizard"
-    provider.providerId == "custom_m3u" -> maskUrl(provider.customM3uUrl)
     else -> "${provider.providerId} | ${provider.username}"
 }
 

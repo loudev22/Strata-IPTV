@@ -288,10 +288,13 @@ class HomeViewModel @Inject constructor(
             Log.i(TAG, "needsSync=$needsSync (movieCount=$movieCount, " +
                 "freq=${settings.syncFrequency}, lastSyncDay=$lastSyncDay, today=$today)")
             if (needsSync) {
-                val url = settings.provider.toM3uUrl()
-                Log.i(TAG, "Calling syncService.syncFromUrl($url, sourceId=$sourceId)")
+                Log.i(
+                    TAG,
+                    "Calling Xtream sync for provider=${settings.provider.providerId}, " +
+                        "host=${settings.provider.host}, sourceId=$sourceId",
+                )
                 runCatching {
-                    syncService.syncFromUrl(url, sourceId)
+                    syncService.syncFromXtream(settings.provider, sourceId)
                 }
                     .onSuccess {
                         Log.i(TAG, "Sync completed successfully")

@@ -34,8 +34,8 @@ class SettingsRepository @Inject constructor(
         val PROVIDER_HOST = stringPreferencesKey("provider_host")
         val PROVIDER_USERNAME = stringPreferencesKey("provider_username")
         val PROVIDER_PASSWORD = stringPreferencesKey("provider_password")
-        val PROVIDER_CUSTOM_M3U = stringPreferencesKey("provider_custom_m3u")
-        val PROVIDER_USE_FILTERED = booleanPreferencesKey("provider_use_filtered_playlist")
+        val LEGACY_PROVIDER_CUSTOM_M3U = stringPreferencesKey("provider_custom_m3u")
+        val LEGACY_PROVIDER_USE_FILTERED = booleanPreferencesKey("provider_use_filtered_playlist")
         val SYNC_FREQUENCY = stringPreferencesKey("sync_frequency")
         val LAST_SYNC_EPOCH_DAY = longPreferencesKey("last_sync_epoch_day")
         val COUNTRY_WHITELIST = stringSetPreferencesKey("country_whitelist")
@@ -56,8 +56,7 @@ class SettingsRepository @Inject constructor(
                 host = prefs[Keys.PROVIDER_HOST].orEmpty(),
                 username = prefs[Keys.PROVIDER_USERNAME].orEmpty(),
                 password = prefs[Keys.PROVIDER_PASSWORD].orEmpty(),
-                customM3uUrl = prefs[Keys.PROVIDER_CUSTOM_M3U].orEmpty(),
-                useFilteredPlaylist = prefs[Keys.PROVIDER_USE_FILTERED] ?: false,
+                legacyFilteredSourceKey = prefs[Keys.LEGACY_PROVIDER_USE_FILTERED] ?: false,
             ),
             syncFrequency = prefs[Keys.SYNC_FREQUENCY]
                 ?.let { runCatching { SyncFrequency.valueOf(it) }.getOrNull() }
@@ -85,8 +84,10 @@ class SettingsRepository @Inject constructor(
             prefs[Keys.PROVIDER_HOST] = config.host
             prefs[Keys.PROVIDER_USERNAME] = config.username
             prefs[Keys.PROVIDER_PASSWORD] = config.password
-            prefs[Keys.PROVIDER_CUSTOM_M3U] = config.customM3uUrl
-            prefs[Keys.PROVIDER_USE_FILTERED] = config.useFilteredPlaylist
+            // Remove legacy M3U settings. Preserve only the previous
+            // filtered-source marker to keep existing content IDs stable.
+            prefs.remove(Keys.LEGACY_PROVIDER_CUSTOM_M3U)
+            prefs[Keys.LEGACY_PROVIDER_USE_FILTERED] = config.legacyFilteredSourceKey
         }
     }
 
@@ -96,8 +97,8 @@ class SettingsRepository @Inject constructor(
             prefs.remove(Keys.PROVIDER_HOST)
             prefs.remove(Keys.PROVIDER_USERNAME)
             prefs.remove(Keys.PROVIDER_PASSWORD)
-            prefs.remove(Keys.PROVIDER_CUSTOM_M3U)
-            prefs.remove(Keys.PROVIDER_USE_FILTERED)
+            prefs.remove(Keys.LEGACY_PROVIDER_CUSTOM_M3U)
+            prefs.remove(Keys.LEGACY_PROVIDER_USE_FILTERED)
         }
     }
 

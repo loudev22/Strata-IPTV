@@ -23,7 +23,6 @@ import com.strata.tv.data.db.SeriesDao
 import com.strata.tv.data.db.SourceDao
 import com.strata.tv.data.db.WatchHistoryDao
 import com.strata.tv.data.db.WatchlistDao
-import com.strata.tv.data.m3u.M3uParser
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -36,8 +35,8 @@ import javax.inject.Singleton
 /**
  * Hilt's bindings for the data layer.
  *
- * Provides Room, OkHttp + the M3U parser as singletons.  Each DAO is
- * exposed as its own `@Provides` so a screen's ViewModel can inject
+ * Provides Room and the shared OkHttp client. Each DAO is exposed as
+ * its own @Provides so a screen's ViewModel can inject
  * exactly the surface it needs without dragging the whole AppDatabase
  * along with it.
  */
@@ -101,7 +100,4 @@ object AppModule {
         .readTimeout(60, TimeUnit.SECONDS) // EPG XMLTV bodies can be ~150 MB.
         .build()
 
-    @Provides
-    @Singleton
-    fun provideM3uParser(): M3uParser = M3uParser()
 }

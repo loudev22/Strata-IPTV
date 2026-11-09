@@ -19,22 +19,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Pulls the Xtream Codes JSON API (`player_api.php`) and converts the
- * responses into [M3uEntry] objects so the existing
- * [com.strata.tv.data.repo.SyncService] persistence pipeline can write
- * them to Room unchanged.
- *
- * Used as a fallback when `get.php?type=m3u_plus` returns JSON or an
- * empty body — some providers (e.g. MyBunny.TV) don't serve M3U at all,
- * only the JSON API.  The JSON path is universal across Xtream Codes
- * deployments so it doubles as the primary path for any provider that
- * isn't a raw M3U URL.
- *
- * Live channel stream URLs come straight from the `direct_source` field
- * when present (which CDN-routes through the provider's edge host).
- * Series episode URLs are synthesised because `get_series` doesn't
- * include them — done as `{host}/series/{user}/{pass}/{episode_id}.{ext}`
- * per the Xtream spec.
+ * Fetches the provider catalogue exclusively through the Xtream Codes JSON API.
+ * Responses are normalized into M3uEntry records for the Room persistence layer.
+ * Series episodes are fetched lazily when the user opens a series detail screen.
  */
 @Singleton
 class XtreamJsonClient @Inject constructor(
@@ -57,9 +44,8 @@ class XtreamJsonClient @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     /**
-     * Pulls categories + live + VOD + series + episode listings and
-     * returns them already shaped as [M3uEntry] objects ready for the
-     * existing dedup/persist passes.
+     * Pulls categories, live channels, VOD movies and series metadata, then
+     * returns them shaped as M3uEntry objects ready for the persistence passes.
      *
      * @param host Provider host with scheme, e.g. `https://mybunny.tv`.
      * @param user Xtream username.

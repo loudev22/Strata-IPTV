@@ -106,10 +106,9 @@ class ShellGateViewModel @Inject constructor(
     }
 
     /**
-     * Re-trigger the sync from the FirstSync error screen.  Same code
-     * path as SettingsViewModel.refreshLibrary() — pulls the M3U from
-     * the configured provider, lets SyncService update progress, and
-     * surfaces failures via Progress.Error again if it still fails.
+     * Re-trigger the sync from the FirstSync error screen.  Same code path as SettingsViewModel.refreshLibrary(): imports the
+     * configured provider through Xtream JSON and surfaces failures
+     * via Progress.Error if the retry still fails.
      */
     fun retrySync() {
         viewModelScope.launch {
@@ -117,7 +116,7 @@ class ShellGateViewModel @Inject constructor(
             if (!cfg.isConfigured) return@launch
             val sourceId = bootstrap.ensureSource()
             runCatching {
-                syncService.syncFromUrl(cfg.toM3uUrl(), sourceId)
+                syncService.syncFromXtream(cfg, sourceId)
             }.onFailure { e ->
                 android.util.Log.e("ShellGateVM", "retrySync failed", e)
             }
