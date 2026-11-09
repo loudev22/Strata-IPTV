@@ -446,6 +446,18 @@ private fun describeProvider(provider: ProviderConfig): String = when {
     else -> "${provider.providerId} | ${provider.username}"
 }
 
+/**
+ * Masks provider credentials before showing an endpoint in the settings UI.
+ * Never expose Xtream usernames or passwords in visible UI text.
+ */
+private fun maskUrl(url: String): String =
+    try {
+        val uri = java.net.URI(url)
+        "${uri.scheme}://${uri.host}/****"
+    } catch (_: Exception) {
+        "****"
+    }
+
 private fun formatExpiry(instant: Instant): String =
     DateTimeFormatter.ofPattern("d MMM yyyy")
         .withZone(ZoneId.systemDefault())
