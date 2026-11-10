@@ -107,6 +107,13 @@ fun PlayerScreen(
     var subtitleMenuVisible by remember { mutableStateOf(false) }
     var focusSubtitleOnNextReveal by remember { mutableStateOf(false) }
 
+    val audioFocusRequester = remember { FocusRequester() }
+    val audioOptionFocusRequester = remember { FocusRequester() }
+    val audioTracks by viewModel.audioTracks.collectAsState()
+    var audioButtonFocused by remember { mutableStateOf(false) }
+    var audioMenuVisible by remember { mutableStateOf(false) }
+    var focusAudioOnNextReveal by remember { mutableStateOf(false) }
+
     // Track the current display title for live channel switching.
     var displayTitle by remember { mutableStateOf(title) }
 
@@ -128,16 +135,36 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(state.controlsVisible, focusSubtitleOnNextReveal) {
-        if (state.controlsVisible && focusSubtitleOnNextReveal && subtitleTracks.isNotEmpty()) {
-            runCatching { subtitleFocusRequester.requestFocus() }
-            focusSubtitleOnNextReveal = false
+    LaunchedEffect(
+        state.controlsVisible,
+        focusSubtitleOnNextReveal,
+        focusAudioOnNextReveal,
+        subtitleTracks,
+        audioTracks,
+    ) {
+        if (state.controlsVisible) {
+            when {
+                focusSubtitleOnNextReveal && subtitleTracks.isNotEmpty() -> {
+                    runCatching { subtitleFocusRequester.requestFocus() }
+                    focusSubtitleOnNextReveal = false
+                }
+                focusAudioOnNextReveal && audioTracks.isNotEmpty() -> {
+                    runCatching { audioFocusRequester.requestFocus() }
+                    focusAudioOnNextReveal = false
+                }
+            }
         }
     }
 
     LaunchedEffect(subtitleMenuVisible) {
         if (subtitleMenuVisible) {
             runCatching { subtitleOptionFocusRequester.requestFocus() }
+        }
+    }
+
+    LaunchedEffect(audioMenuVisible) {
+        if (audioMenuVisible) {
+            runCatching { audioOptionFocusRequester.requestFocus() }
         }
     }
 
@@ -196,17 +223,18 @@ fun PlayerScreen(
                     }
                 }
                 val keyCode = event.nativeKeyEvent.keyCode
-                if (subtitleMenuVisible) {
+                if (subtitleMenuVisible || audioMenuVisible) {
                     return@onPreviewKeyEvent when (keyCode) {
                         KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                             subtitleMenuVisible = false
+                            audioMenuVisible = false
                             true
                         }
                         else -> false
                     }
                 }
-                // Let a focused CC control handle activation and D-pad navigation.
-                if (subtitleButtonFocused) {
+                // Let focused track controls handle activation and D-pad navigation.
+                if (subtitleButtonFocused || audioButtonFocused) {
                     when (keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER,
                         KeyEvent.KEYCODE_ENTER,
@@ -259,8 +287,10 @@ fun PlayerScreen(
                             true
                         } else {
                             viewModel.showControls()
-                            if (subtitleTracks.isNotEmpty()) {
-                                focusSubtitleOnNextReveal = true
+                            if (subtitleTracks.isNotEmpty() || audioTracks.isNotEmpty()) {
+                                focusSubtitleOnNextReveal = subtitleTracks.isNotEmpty()
+                                focusAudioOnNextReveal =
+                                    subtitleTracks.isEmpty() && audioTracks.isNotEmpty()
                                 true
                             } else false
                         }
@@ -510,6 +540,36 @@ fun PlayerScreen(
                         }
                     }
 
+                    // Interactive AUDIO control: open the available audio-track selector.
+                    if (audioTracks.isNotEmpty()) {
+                        Spacer(Modifier.width(8.dp))
+                        androidx.tv.material3.Surface(
+                            onClick = { audioMenuVisible = true },
+                            modifier = Modifier
+                                .focusRequester(audioFocusRequester)
+                                .onFocusChanged { audioButtonFocused = it.isFocused },
+                            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(
+                                shape = RoundedCornerShape(4.dp),
+                            ),
+                            colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                containerColor = if (audioTracks.any { it.isSelected }) {
+                                    StrataColors.AccentPrimary
+                                } else {
+                                    StrataColors.SurfaceFloat
+                                },
+                                focusedContainerColor = StrataColors.AccentPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = "AUDIO",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+
                     if (isLive) {
                         Spacer(Modifier.width(8.dp))
                         Box(
@@ -694,6 +754,63 @@ fun PlayerScreen(
                             ),
                             colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
                                 containerColor = if (track.isSelected) StrataColors.AccentPrimary else StrataColors.SurfaceFloat,
+                                focusedContainerColor = StrataColors.AccentPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = track.label,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // -- Audio track selector ----------------------------------------
+        if (audioMenuVisible) {
+            Dialog(onDismissRequest = { audioMenuVisible = false }) {
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(StrataColors.SurfaceRaised)
+                        .padding(24.dp)
+                        .width(360.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "Audio language",
+                        color = StrataColors.TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Choose an available audio track.",
+                        color = StrataColors.TextSecondary,
+                        fontSize = 13.sp,
+                    )
+                    audioTracks.forEachIndexed { index, track ->
+                        androidx.tv.material3.Surface(
+                            onClick = {
+                                viewModel.selectAudioTrack(track.groupIndex, track.trackIndex)
+                                audioMenuVisible = false
+                            },
+                            modifier = Modifier.fillMaxWidth().then(
+                                if (index == 0) Modifier.focusRequester(audioOptionFocusRequester)
+                                else Modifier
+                            ),
+                            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(
+                                shape = RoundedCornerShape(8.dp),
+                            ),
+                            colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                containerColor = if (track.isSelected) {
+                                    StrataColors.AccentPrimary
+                                } else {
+                                    StrataColors.SurfaceFloat
+                                },
                                 focusedContainerColor = StrataColors.AccentPrimary,
                             ),
                         ) {
