@@ -243,6 +243,10 @@ class PlayerViewModel @Inject constructor(
     private val _subtitleTracks = MutableStateFlow<List<SubtitleTrack>>(emptyList())
     val subtitleTracks: StateFlow<List<SubtitleTrack>> = _subtitleTracks.asStateFlow()
 
+    // ── Audio tracks ─────────────────────────────────────────────────
+    private val _audioTracks = MutableStateFlow<List<AudioTrack>>(emptyList())
+    val audioTracks: StateFlow<List<AudioTrack>> = _audioTracks.asStateFlow()
+
     // ── Fav mode state (#11) ─────────────────────────────────────────
 
     /**
@@ -409,24 +413,57 @@ class PlayerViewModel @Inject constructor(
         }
 
         override fun onTracksChanged(tracks: Tracks) {
-            // Update available subtitle tracks when the stream's tracks change.
+            // Refresh both subtitle and audio choices whenever the active
+            // media item exposes a new set of renderer tracks.
             val subs = mutableListOf<SubtitleTrack>()
-            for (group in tracks.groups) {
-                if (group.type != C.TRACK_TYPE_TEXT) continue
-                for (i in 0 until group.length) {
-                    val format = group.getTrackFormat(i)
-                    val label = format.label
-                        ?: format.language?.uppercase()
-                        ?: "Track ${subs.size + 1}"
-                    subs.add(SubtitleTrack(
-                        groupIndex = tracks.groups.indexOf(group),
-                        trackIndex = i,
-                        label = label,
-                        isSelected = group.isTrackSelected(i),
-                    ))
+            val audio = mutableListOf<AudioTrack>()
+
+            tracks.groups.forEachIndexed { groupIndex, group ->
+                when (group.type) {
+                    C.TRACK_TYPE_TEXT -> {
+                        for (i in 0 until group.length) {
+                            val format = group.getTrackFormat(i)
+                            val label = format.label
+                                ?: format.language?.uppercase()
+                                ?: "Track ${subs.size + 1}"
+                            subs.add(SubtitleTrack(
+                                groupIndex = groupIndex,
+                                trackIndex = i,
+                                label = label,
+                                isSelected = group.isTrackSelected(i),
+                            ))
+                        }
+                    }
+
+                    C.TRACK_TYPE_AUDIO -> {
+                        for (i in 0 until group.length) {
+                            val format = group.getTrackFormat(i)
+                            val language = format.language
+                            val displayLanguage = language
+                                ?.takeIf { it.isNotBlank() && it != "und" }
+                                ?.let {
+                                    java.util.Locale.forLanguageTag(it)
+                                        .getDisplayLanguage()
+                                        .takeIf { name -> name.isNotBlank() && name != "und" }
+                                        ?: it.uppercase()
+                                }
+                            val label = format.label
+                                ?.takeIf { it.isNotBlank() }
+                                ?: displayLanguage
+                                ?: "Audio ${audio.size + 1}"
+                            audio.add(AudioTrack(
+                                groupIndex = groupIndex,
+                                trackIndex = i,
+                                label = label,
+                                isSelected = group.isTrackSelected(i),
+                            ))
+                        }
+                    }
                 }
             }
+
             _subtitleTracks.value = subs
+            _audioTracks.value = audio
             _uiState.update { it.copy(subtitlesEnabled = subs.any { t -> t.isSelected }) }
         }
     }
@@ -662,6 +699,21 @@ class PlayerViewModel @Inject constructor(
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
         _uiState.update { it.copy(subtitlesEnabled = false) }
+    }
+
+    // ── Audio API ────────────────────────────────────────────────────
+
+    /** Select a specific audio track without restarting the current media item. */
+    fun selectAudioTrack(groupIndex: Int, trackIndex: Int) {
+        val group = player.currentTracks.groups.getOrNull(groupIndex) ?: return
+        if (group.type != C.TRACK_TYPE_AUDIO || trackIndex !in 0 until group.length) return
+
+        val override = TrackSelectionOverride(group.mediaTrackGroup, trackIndex)
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setOverrideForType(override)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+            .build()
     }
 
     /**
@@ -1193,6 +1245,14 @@ data class PlayerUiState(
 
 /** A single subtitle/CC track available in the current stream. */
 data class SubtitleTrack(
+    val groupIndex: Int,
+    val trackIndex: Int,
+    val label: String,
+    val isSelected: Boolean,
+)
+
+/** A single selectable audio track available in the current stream. */
+data class AudioTrack(
     val groupIndex: Int,
     val trackIndex: Int,
     val label: String,
