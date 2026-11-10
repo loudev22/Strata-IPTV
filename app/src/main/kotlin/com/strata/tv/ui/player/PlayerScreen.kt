@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -98,6 +100,12 @@ fun PlayerScreen(
     // when a stream fails, D-pad focus lands on Retry/Go-Back instead of
     // being swallowed by the player transport controls underneath.
     val retryFocusRequester = remember { FocusRequester() }
+    val subtitleFocusRequester = remember { FocusRequester() }
+    val subtitleOptionFocusRequester = remember { FocusRequester() }
+    val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+    var subtitleButtonFocused by remember { mutableStateOf(false) }
+    var subtitleMenuVisible by remember { mutableStateOf(false) }
+    var focusSubtitleOnNextReveal by remember { mutableStateOf(false) }
 
     // Track the current display title for live channel switching.
     var displayTitle by remember { mutableStateOf(title) }
@@ -117,6 +125,19 @@ fun PlayerScreen(
         )
         if (channelList.isNotEmpty()) {
             viewModel.setChannelList(channelList, currentChannelIndex)
+        }
+    }
+
+    LaunchedEffect(state.controlsVisible, focusSubtitleOnNextReveal) {
+        if (state.controlsVisible && focusSubtitleOnNextReveal && subtitleTracks.isNotEmpty()) {
+            runCatching { subtitleFocusRequester.requestFocus() }
+            focusSubtitleOnNextReveal = false
+        }
+    }
+
+    LaunchedEffect(subtitleMenuVisible) {
+        if (subtitleMenuVisible) {
+            runCatching { subtitleOptionFocusRequester.requestFocus() }
         }
     }
 
@@ -174,7 +195,29 @@ fun PlayerScreen(
                         else -> false
                     }
                 }
-                when (event.nativeKeyEvent.keyCode) {
+                val keyCode = event.nativeKeyEvent.keyCode
+                if (subtitleMenuVisible) {
+                    return@onPreviewKeyEvent when (keyCode) {
+                        KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                            subtitleMenuVisible = false
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                // Let a focused CC control handle activation and D-pad navigation.
+                if (subtitleButtonFocused) {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_SPACE,
+                        KeyEvent.KEYCODE_DPAD_UP,
+                        KeyEvent.KEYCODE_DPAD_DOWN,
+                        KeyEvent.KEYCODE_DPAD_LEFT,
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> return@onPreviewKeyEvent false
+                    }
+                }
+                when (keyCode) {
                     KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                         when {
                             state.nextEpisode != null -> viewModel.cancelAutoplay()
@@ -216,7 +259,10 @@ fun PlayerScreen(
                             true
                         } else {
                             viewModel.showControls()
-                            false
+                            if (subtitleTracks.isNotEmpty()) {
+                                focusSubtitleOnNextReveal = true
+                                true
+                            } else false
                         }
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -438,24 +484,28 @@ fun PlayerScreen(
                             )
                         }
                     }
-                    // CC toggle
-                    val subs by viewModel.subtitleTracks.collectAsState()
-                    if (subs.isNotEmpty()) {
+                    // Interactive CC control: open the subtitle-track selector.
+                    if (subtitleTracks.isNotEmpty()) {
                         Spacer(Modifier.width(8.dp))
-                        Box(
+                        androidx.tv.material3.Surface(
+                            onClick = { subtitleMenuVisible = true },
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    if (state.subtitlesEnabled) StrataColors.AccentPrimary
-                                    else StrataColors.SurfaceFloat,
-                                )
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                .focusRequester(subtitleFocusRequester)
+                                .onFocusChanged { subtitleButtonFocused = it.isFocused },
+                            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(
+                                shape = RoundedCornerShape(4.dp),
+                            ),
+                            colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                containerColor = if (state.subtitlesEnabled) StrataColors.AccentPrimary else StrataColors.SurfaceFloat,
+                                focusedContainerColor = StrataColors.AccentPrimary,
+                            ),
                         ) {
                             Text(
                                 text = "CC",
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
                     }
@@ -579,6 +629,80 @@ fun PlayerScreen(
                                 contentDescription = "Forward 30 seconds",
                                 tint = Color.White.copy(alpha = 0.85f),
                                 modifier = Modifier.size(40.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // -- Subtitle track selector -------------------------------------
+        if (subtitleMenuVisible) {
+            Dialog(onDismissRequest = { subtitleMenuVisible = false }) {
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(StrataColors.SurfaceRaised)
+                        .padding(24.dp)
+                        .width(360.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "Subtitles",
+                        color = StrataColors.TextPrimary,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Choose a track or turn subtitles off.",
+                        color = StrataColors.TextSecondary,
+                        fontSize = 13.sp,
+                    )
+                    androidx.tv.material3.Surface(
+                        onClick = {
+                            viewModel.disableSubtitles()
+                            subtitleMenuVisible = false
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(subtitleOptionFocusRequester),
+                        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(
+                            shape = RoundedCornerShape(8.dp),
+                        ),
+                        colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                            containerColor = if (state.subtitlesEnabled) StrataColors.SurfaceFloat else StrataColors.AccentPrimary,
+                            focusedContainerColor = StrataColors.AccentPrimary,
+                        ),
+                    ) {
+                        Text(
+                            text = "Off",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                    subtitleTracks.forEach { track ->
+                        androidx.tv.material3.Surface(
+                            onClick = {
+                                viewModel.selectSubtitleTrack(track.groupIndex, track.trackIndex)
+                                subtitleMenuVisible = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(
+                                shape = RoundedCornerShape(8.dp),
+                            ),
+                            colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                containerColor = if (track.isSelected) StrataColors.AccentPrimary else StrataColors.SurfaceFloat,
+                                focusedContainerColor = StrataColors.AccentPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = track.label,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             )
                         }
                     }
